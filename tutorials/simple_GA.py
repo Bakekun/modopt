@@ -11,6 +11,7 @@ and handling various types of optimization problems.
 
 import numpy as np
 from scipy.stats.qmc import Sobol
+import time
 
 class simpleGA:
     Optimization_name = "Simple Genetic Algorithm"
@@ -128,20 +129,38 @@ if __name__ == '__main__':
     Beale = lambda x,y: (1.5-x+x*y)**2 + (2.25 -x +x*y**2)**2 + (2.625-x+x*y**3)**2
     Ackley = lambda x,y: -20*np.exp(-0.2*np.sqrt(0.5*(x**2+y**2))) - np.exp(0.5*(np.cos(2*np.pi*x)+np.cos(2*np.pi*y))) + np.e + 20
 
-    myGA_Rosenbrock = simpleGA(Rosenbrock2D, 2**9, -4, 4, 2, 0.2, 0.3, 5000)
+    myGA_Rosenbrock = simpleGA(Rosenbrock2D, 2**9, -4, 4, 2, 0.2, 1, 5000)
+    start_time = time.time()
     optimality, optimal_design = myGA_Rosenbrock.Optimize()
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    print(f"Execution Time: {elapsed_time:.2f} seconds")
+    print(f"End Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
 
     print(optimality)
     print(optimal_design)
 
-    myGA_Gold = simpleGA(Goldstien_Price, 2**9, -4, 4, 2, 0.2, 0.3, 5000)
+    myGA_Gold = simpleGA(Goldstien_Price, 2**9, -4, 4, 2, 0.2, 1, 5000)
+    start_time = time.time()
     optimality, optimal_design = myGA_Gold.Optimize()
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    print(f"Execution Time: {elapsed_time:.2f} seconds")
+    print(f"End Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
 
     print(optimality)
     print(optimal_design)
 
-    myGA_Himme = simpleGA(Himmelblau, 2**9, -4, 4, 2, 0.2, 0.3, 5000)
+    myGA_Himme = simpleGA(Himmelblau, 2**9, -4, 4, 2, 0.2, 1, 5000)
+    start_time = time.time()
     optimality, optimal_design = myGA_Himme.Optimize()
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    print(f"Execution Time: {elapsed_time:.2f} seconds")
+    print(f"End Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
 
     print(optimality)
     print(optimal_design)

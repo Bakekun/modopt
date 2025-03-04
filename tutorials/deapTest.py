@@ -1,5 +1,6 @@
 from deap import base, creator, tools
 import random
+import time
 
 creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
 creator.create("Individual", list, fitness=creator.FitnessMin)
@@ -14,7 +15,7 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
 def evaluate(individual):
     x, y = individual
-    objective = (1 - x) ** 2 + 100 * (y - x ** 2) ** 2
+    objective = (x**2+y-11)**2+(x+y**2-7)**2+0.1*x + 0.1*y
     return (objective,)
 
 toolbox.register("mate", tools.cxBlend, alpha=0.5)
@@ -66,4 +67,10 @@ def main():
     return pop
 
 if __name__ == "__main__":
+    start_time = time.time()
     main()
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    print(f"Execution Time: {elapsed_time:.2f} seconds")
+    print(f"End Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
