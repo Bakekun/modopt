@@ -908,6 +908,25 @@ class MOO_Problem(ABC):
         if vals is not None:
             self.vjp[wrt] = vals
 
+    def declare_objectives_gradient(self, wrt):
+        """
+        Declare gradients for multiple objectives with respect to a design variable.
+    
+        Parameters
+        ----------
+        wrt : str
+            Name of the variable with respect to which the gradient is computed.
+        """
+        if wrt not in self.design_variables_dict:
+            raise KeyError(f"Gradient declared for undeclared design variable '{wrt}'.")
+    
+        if "grad" not in self.declared_variables:
+            self.declared_variables.append("grad")
+    
+        # Declare gradient storage for all objectives
+        for obj in self.obj.keys():
+            self.pF_px[obj, wrt] = None  # Placeholder, user will provide values later
+
     def declare_objectives_hessian(self, obj_names, wrt, shape=None, vals=None, rows=None, cols=None, ind_ptr=None):
         """
         Declare nonzero Hessian components for multiple objectives.
