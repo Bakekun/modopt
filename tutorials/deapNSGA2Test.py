@@ -33,10 +33,7 @@ def main():
 
 
     for g in range(NGEN):
-        # Select the next generation individuals
-        offspring = toolbox.select(pop, len(pop))
-        # Clone the selected individuals
-        offspring = list(map(toolbox.clone, offspring))
+        offspring = list(map(toolbox.clone, pop))
 
         # Apply crossover and mutation on the offspring
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
@@ -52,17 +49,20 @@ def main():
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        fitnesses = map(toolbox.evaluate, invalid_ind)
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
+        for ind in invalid_ind:
+            ind.fitness.values = toolbox.evaluate(ind)
 
         # The population is entirely replaced by the offspring
-        pop[:] = offspring
+        combined_pop = pop + offspring
 
-    # Output the best solution
-    best_ind = tools.selBest(pop, 1)[0]
-    print(f"Best solution: {best_ind}")
-    print(f"Best fitness: {best_ind.fitness.values[0]}")
+        pop[:] = toolbox.select(combined_pop, len(pop))
+
+    # Retrieve and print the best individual found
+    best_inds = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
+    print("\nPareto Front Solutions:")
+    for ind in best_inds:
+        print(f"Solution: {ind}, Fitness: {ind.fitness.values}")
+
 
     return pop
 
