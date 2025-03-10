@@ -31,7 +31,7 @@ class MOO_Problem(ABC):
     options : modopt.OptionsDictionary
         Problem-specific options declared by the user in addition
         to the global problem options 'jac_format' and 'hess_format'.
-    obj : dict
+    objs : dict
         Dictionary with objective names as keys and current (unscaled) objective
         function values as values.
         Note that only one objective is supported by modOpt currently.
@@ -47,7 +47,7 @@ class MOO_Problem(ABC):
         True if the problem has constraints. False if unconstrained.
     declared_variables: list
         List of problem variables declared by the user.
-        It can at most be ['dv', 'obj', 'grad', 'con', 'jac', 'jvp', 'vjp', 
+        It can at most be ['dv', 'objs', 'grad', 'con', 'jac', 'jvp', 'vjp', 
         'obj_hess', 'obj_hvp', 'lag', 'lag_grad', 'lag_hess', 'lag_hvp']
 
     x_lower : np.ndarray or NoneType
@@ -149,7 +149,7 @@ class MOO_Problem(ABC):
         self.nx = 0
         self.nc = 0
         # TODO: Fix this
-        self.obj = {}
+        self.objs = {}
         self.obj_scaler = {}
         self.lag = {}
         self.constrained = False
@@ -236,10 +236,8 @@ class MOO_Problem(ABC):
         self._setup_jacobian_dict()
         self._setup_hessian_dict()
 
-        self.setup_derivatives()
         self._setup_matrices()
 
-        self.delete_unnecessary_attributes_allocated()
         self.raise_issues_with_user_setup()
         self.user_defined_callbacks = deepcopy(self.declared_variables)
         self.user_defined_callbacks.remove('dv')
@@ -249,7 +247,7 @@ class MOO_Problem(ABC):
         Print the details of the optimization problem.
         """
         name = self.problem_name
-        obj  = self.obj
+        objs  = self.objs
         obj_scaler = self.obj_scaler
         dvs  = self.x
         x_s  = self.x_scaler; x_l  = self.x_lower/x_s; x_u  = self.x_upper/x_s 
@@ -262,7 +260,7 @@ class MOO_Problem(ABC):
         output += f'\n\t' + pad_name('Problem name', 25) + f': {name}'
         
         # Print objective name
-        output += f'\n\t' + pad_name('Objectives', 25) + f': '+', '.join(obj.keys())
+        output += f'\n\t' + pad_name('Objectives', 25) + f': '+', '.join(objs.keys())
         
         # Print design variables list with their dimensions
         dv_list = ''
@@ -288,8 +286,8 @@ class MOO_Problem(ABC):
         header = "\t%-5s | %-10s | %-13s | %-13s " % ('Index', 'Name', 'Scaler', 'Value')
         output += header
         obj_template = "\n\t{idx:>5} | {name:<10} | {scaler:<+.6e} | {value:<+.6e}"
-        for i, obj_name in enumerate(obj.keys()):
-            obj_value = obj[obj_name]
+        for i, obj_name in enumerate(objs.keys()):
+            obj_value = objs[obj_name]
             obj_s     = obj_scaler[obj_name]
             output   += obj_template.format(idx=i, name=obj_name, scaler=obj_s, value=obj_value)
 
@@ -565,95 +563,43 @@ class MOO_Problem(ABC):
                 self.p2L_pyy.allocate()
         ###############################
             
-    def raise_issues_with_user_setup(self, ):
+    def raise_issues_with_user_setup(self):
         '''
-        Raise errors or warnings associated with declarations made by the user in
-        setup() or setup_derivatives().
+        Raise errors or warnings associated with declarations made by the user in setup().
         Overridden when using interfaced modeling frameworks like CSDL or OpenMDAO and CUTEst.
         '''
         if 'dv' not in self.declared_variables:
             raise Exception("No design variables are declared.")
-        if 'obj' in self.declared_variables:
-            if self.compute_objective.__func__ == Problem.compute_objective:
-                raise Exception("Objective is declared but compute_objective() method is not implemented.")
+
+        if 'objs' in self.declared_variables:
+            if not hasattr(self, 'compute_objectives'):
+                raise Exception("Objective is declared but compute_objectives() method is not implemented.")
         else:
             if 'con' not in self.declared_variables:
                 raise Exception("No objective or constraints are declared.")
             warnings.warn("No objective is declared. Running a feasibility problem.")
-            self.add_objective('dummy_obj')
-            self.obj['dummy_obj'] = 0. # Default value 1. is replaced with 0. for feasibility problems
-            # Set a dummy function for compute_objective to avoid NotImplementedError 
-            # when calling this optional abstract method that is not implemented by the user
-            # and not required for feasibility problems
-            self.compute_objective = lambda dvs, obj: None
+            self.add_objectives('dummy_obj')
+            self.objs['dummy_obj'] = 0.  # Default value 1. is replaced with 0. for feasibility problems
 
-            # Add back pF_px only for a gradient-based feasibility problem since 
-            # it was deleted in delete_unnecessary_attributes_allocated()
-            # Set a dummy function for compute_objective_gradient to avoid NotImplementedError
-            if 'jac' in self.declared_variables: # checking if Jacobian is declared for constraints
-                self.pF_px = Vector(self.design_variables_dict)
-                self.pF_px.allocate(data=np.zeros((self.nx, )), setup_views=False)
-                self.compute_objective_gradient = lambda dvs, grad: None
+            # Set a dummy function for compute_objectives to avoid NotImplementedError
+            self.compute_objectives = lambda dvs, objs: None
 
         if 'con' in self.declared_variables:
-            if self.compute_constraints.__func__ == Problem.compute_constraints:
+            if not hasattr(self, 'compute_constraints'):
                 raise Exception("Constraints are declared but compute_constraints() method is not implemented.")
-        if 'lag' in self.declared_variables:
-            if 'con' not in self.declared_variables:
-                raise Exception("Lagrangian is declared but no constraints are declared.")
-            if self.compute_lagrangian.__func__ == Problem.compute_lagrangian:
-                raise Exception("Lagrangian is declared but compute_lagrangian() method is not implemented.")
-        if 'grad' in self.declared_variables:
-            if self.compute_objective_gradient.__func__ == Problem.compute_objective_gradient:
-                raise Exception("Objective gradient is declared but compute_objective_gradient() method is not implemented."
-                                "If declared derivatives are constant, define an empty compute_objective_gradient() with 'pass'."
-                                "If declared derivatives are not available, define a compute_objective_gradient() method"
-                                "that calls self.use_finite_differencing('objective_gradient', step=1.e-6)."
-                                "If using a gradient-free optimizer, do not declare objective gradient.")
-        if 'obj_hess' in self.declared_variables:
-            if self.compute_objective_hessian.__func__ == Problem.compute_objective_hessian:
-                raise Exception("Objective Hessian is declared but compute_objective_hessian() method is not implemented."
-                                "If declared derivatives are constant, define an empty compute_objective_hessian() with 'pass'."
-                                "If declared derivatives are not available, define a compute_objective_hessian() method"
-                                "that calls self.use_finite_differencing('objective_hessian', step=1.e-6)."
-                                "If using a gradient-free optimizer, do not declare objective Hessian.")
-        if 'obj_hvp' in self.declared_variables:
-            if self.compute_objective_hvp.__func__ == Problem.compute_objective_hvp:
-                raise Exception("Objective HVP is declared but compute_objective_hvp() method is not implemented.")
-            
-        if self.constrained:
-            if 'jac' in self.declared_variables:
-                if self.compute_constraint_jacobian.__func__ == Problem.compute_constraint_jacobian:
-                    raise Exception("Constraint Jacobian is declared but compute_constraint_jacobian() method is not implemented."
-                                    "If declared derivatives are constant, define an empty compute_constraint_jacobian() with 'pass'."
-                                    "If declared derivatives are not available, define a compute_constraint_jacobian() method"
-                                    "that calls self.use_finite_differencing('constraint_jacobian', step=1.e-6)."
-                                    "If using a gradient-free optimizer, do not declare constraint Jacobian.")
-            if 'jvp' in self.declared_variables:
-                if self.compute_constraint_jvp.__func__ == Problem.compute_constraint_jvp:
-                    raise Exception("Constraint JVP is declared but compute_constraint_jvp() method is not implemented.")
-            if 'vjp' in self.declared_variables:
-                if self.compute_constraint_vjp.__func__ == Problem.compute_constraint_vjp:
-                    raise Exception("Constraint VJP is declared but compute_constraint_vjp() method is not implemented.")
-            if 'lag_grad' in self.declared_variables:
-                if self.compute_lagrangian_gradient.__func__ == Problem.compute_lagrangian_gradient:
-                    raise Exception("Lagrangian gradient is declared but compute_lagrangian_gradient() method is not implemented.")
-            if 'lag_hess' in self.declared_variables:
-                if self.compute_lagrangian_hessian.__func__ == Problem.compute_lagrangian_hessian:
-                    raise Exception("Lagrangian Hessian is declared but compute_lagrangian_hessian() method is not implemented.")
-            if 'lag_hvp' in self.declared_variables:
-                if self.compute_lagrangian_hvp.__func__ == Problem.compute_lagrangian_hvp:
-                    raise Exception("Lagrangian HVP is declared but compute_lagrangian_hvp() method is not implemented.")
-
-        if ('grad' not in self.declared_variables) and ('lag_grad' not in self.declared_variables):
-            # Don't raise an error since gradient-free optimization is possible
-            # Will raise errors if trying to access gradients later since pF_px was deleted
-            warnings.warn("No objective/Lagrangian gradient is declared.")
 
         if self.constrained:
-            if all(x not in self.declared_variables for x in ['jac', 'jvp', 'vjp', 'lag_grad']):
-                # Don't raise an error since gradient-free optimization is possible
-                warnings.warn("No constraint-related derivatives (jacobian, jvp, vjp, dL/dx) are declared.")
+            if 'jac' in self.declared_variables and not hasattr(self, 'compute_constraint_jacobian'):
+                raise Exception("Constraint Jacobian is declared but compute_constraint_jacobian() method is not implemented.")
+
+            if 'jvp' in self.declared_variables and not hasattr(self, 'compute_constraint_jvp'):
+                raise Exception("Constraint JVP is declared but compute_constraint_jvp() method is not implemented.")
+
+            if 'vjp' in self.declared_variables and not hasattr(self, 'compute_constraint_vjp'):
+                raise Exception("Constraint VJP is declared but compute_constraint_vjp() method is not implemented.")
+
+        if self.constrained and all(x not in self.declared_variables for x in ['jac', 'jvp', 'vjp']):
+            warnings.warn("No constraint-related derivatives (jacobian, jvp, vjp) are declared.")
 
     def add_design_variables(self,
                              name=None,
@@ -733,17 +679,17 @@ class MOO_Problem(ABC):
         if not isinstance(obj_names, list) or len(obj_names) < 2:
             raise ValueError("Multi-objective optimization requires at least two objectives.")
 
-        self.obj = {}  # Reset objectives dictionary
+        self.objs = {}  # Reset objectives dictionary
         self.obj_scaler = {}
 
         for i, name in enumerate(obj_names):
-            self.obj[name] = 0.0  # Default value for each objective
+            self.objs[name] = 0.0  # Default value for each objective
             self.obj_scaler[name] = scalers[i] if scalers else 1.0  # Default scaler to 1.0 if not provided
 
-        print(f"Setting objective names as {', '.join(self.obj.keys())}.")
+        print(f"Setting objective names as {', '.join(self.objs.keys())}.")
 
-        if 'obj' not in self.declared_variables:
-            self.declared_variables.append('obj')
+        if 'objs' not in self.declared_variables:
+            self.declared_variables.append('objs')
 
     def add_constraints(self,
                         name=None,
@@ -908,25 +854,6 @@ class MOO_Problem(ABC):
         if vals is not None:
             self.vjp[wrt] = vals
 
-    def declare_objectives_gradient(self, wrt):
-        """
-        Declare gradients for multiple objectives with respect to a design variable.
-    
-        Parameters
-        ----------
-        wrt : str
-            Name of the variable with respect to which the gradient is computed.
-        """
-        if wrt not in self.design_variables_dict:
-            raise KeyError(f"Gradient declared for undeclared design variable '{wrt}'.")
-    
-        if "grad" not in self.declared_variables:
-            self.declared_variables.append("grad")
-    
-        # Declare gradient storage for all objectives
-        for obj in self.obj.keys():
-            self.pF_px[obj, wrt] = None  # Placeholder, user will provide values later
-
     def declare_objectives_hessian(self, obj_names, wrt, shape=None, vals=None, rows=None, cols=None, ind_ptr=None):
         """
         Declare nonzero Hessian components for multiple objectives.
@@ -939,7 +866,7 @@ class MOO_Problem(ABC):
             Name of the variable w.r.t. which the Hessian needs to be declared.
         """
         for obj_name in obj_names:
-            if (wrt not in self.design_variables_dict) or (obj_name not in self.obj):
+            if (wrt not in self.design_variables_dict) or (obj_name not in self.objs):
                 raise KeyError(f'Hessian declared for undeclared variable or objective ({obj_name}, {wrt}).')
 
             if 'obj_hess' not in self.declared_variables:
@@ -1136,15 +1063,15 @@ class MOO_Problem(ABC):
             raise ValueError('Step size "step" must be a scalar or an array of size (nx,) where nx is the number of design variables.')
         if derivative == 'objective_gradient':
             x = self.x.get_data()
-            self.compute_objective(self.x, self.obj)
-            f0 = list(self.obj.values())[0]
+            self.compute_objective(self.x, self.objs)
+            f0 = list(self.objs.values())[0]
             g_fd = np.zeros((self.nx,))
             for i in range(self.nx):
                 e = np.zeros((self.nx,))
                 e[i] = 1.
                 self.x.set_data(x + step*e)
-                self.compute_objective(self.x, self.obj)
-                f1 = list(self.obj.values())[0]
+                self.compute_objective(self.x, self.objs)
+                f1 = list(self.objs.values())[0]
                 g_fd[i] = (f1 - f0)
             g_fd /= step
             self.pF_px.set_data(g_fd)
@@ -1254,8 +1181,8 @@ class MOO_Problem(ABC):
         self.x.set_data(x / self.x_scaler)
         self.compute_objectives_gradient(self.x, self.grads)
         objective_scalers = np.array(list(self.obj_scaler.values()))
-        return np.vstack([self.grads[obj] * objective_scalers[i] / self.x_scaler
-                          for i, obj in enumerate(self.grads.keys())])
+        return np.vstack([self.grads[objs] * objective_scalers[i] / self.x_scaler
+                          for i, objs in enumerate(self.grads.keys())])
 
     @record(['x'], ['obj_hess_dict'])
     @hot_start(['x'], ['obj_hess_dict'])
@@ -1444,8 +1371,8 @@ class MOO_Problem(ABC):
 
         # Allow for multiple objectives
         if vals is not None:
-            for obj in self.objs.keys():
-                self.pF_px[obj, wrt] = vals
+            for objs in self.objs.keys():
+                self.pF_px[objs, wrt] = vals
 
 # # Override for specific problems if bounds are not available in this format, eg. csdl
     def declare_variable_bounds(self, x_lower, x_upper):
@@ -1458,53 +1385,17 @@ class MOO_Problem(ABC):
         self.c_upper = c_upper
 
     def evaluate_lagrangian_hessian(self, x, y, lag_mult):
-        """
-        Evaluate the Lagrangian Hessian for multi-objective optimization.
-
-        Parameters
-        ----------
-        x : np.ndarray
-            Design variable vector.
-        y : np.ndarray
-            State variable vector.
-        lag_mult : np.ndarray
-            Lagrange multiplier vector.
-
-        Returns
-        -------
-        hessian : np.ndarray
-            Hessian matrix of the Lagrangian function for multi-objective optimization.
-        """
-        hessian = np.zeros((len(x), len(x)))
-
-        for obj_index, obj in enumerate(self.obj.keys()):
-            hessian += self.evaluate_objective_hessian(x, y, obj) * lag_mult[obj_index]
-
+        hessian = np.zeros((len(x), len(x)))  # Initialize Hessian manually
+        for i, obj_name in enumerate(self.obj.keys()):
+            if (obj_name, obj_name) in self.p2F_pxx_dict:
+                hessian += self.p2F_pxx_dict[obj_name, obj_name]['vals'] * lag_mult[i]
         return hessian
 
     def evaluate_penalty_hessian(self, x, y, rho):
-        """
-        Evaluate the penalty Hessian for constraint handling in multi-objective optimization.
-
-        Parameters
-        ----------
-        x : np.ndarray
-            Design variable vector.
-        y : np.ndarray
-            State variable vector.
-        rho : np.ndarray
-            Vector of penalty parameters for constraint violations.
-
-        Returns
-        -------
-        hessian : np.ndarray
-            Hessian matrix of the penalty function for constraint-handled MOO.
-        """
         hessian = np.zeros((len(x), len(x)))
-
-        for obj_index, obj in enumerate(self.obj.keys()):
-            hessian += self.evaluate_objective_hessian(x, y, obj) * rho[obj_index]
-
+        for i, obj_name in enumerate(self.obj.keys()):
+            if (obj_name, obj_name) in self.p2F_pxx_dict:
+                hessian += self.p2F_pxx_dict[obj_name, obj_name]['vals'] * rho[i]
         return hessian
 
     # With Hessian-vector products, we can also compute products with the augmented Lagrangian Hessian

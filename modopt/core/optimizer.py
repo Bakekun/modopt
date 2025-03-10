@@ -416,7 +416,11 @@ class Optimizer(ABC):
                 if a_outs[key] in (int, np.int_, np.int32, np.int64):
                     new_row += "%10i " % kwargs[key]
                 elif a_outs[key] in (float, np.float_, np.float32, np.float64):
-                    new_row += "%16.6E " % kwargs[key]
+                    if isinstance(kwargs[key], (list, tuple, np.ndarray)):
+                        new_row += "%16.6E " % float(np.mean(kwargs[key]))  # Take mean for logging
+                    else:
+                        new_row += "%16.6E " % kwargs[key]
+
 
             with open(f"{dir}/modopt_summary.out", 'a') as f:
                 f.write(new_row)
@@ -433,7 +437,11 @@ class Optimizer(ABC):
             else:
                 # Multidim. arrays will be flattened (c-major/row major) before writing to a file
                 with open(f"{dir}/{key}.out", 'a') as f:
-                    np.savetxt(f, value.reshape(1, value.size))
+                    if isinstance(value, list) or isinstance(value, np.ndarray):
+                        np.savetxt(f, np.array(value).reshape(1, -1))  # Handles lists/MOO cases
+                    else:
+                        np.savetxt(f, np.array([value]).reshape(1, -1))  # Wrap scalar in a list for SOO
+
         
         # 3. Write the outputs to the recording files
         if self.options['recording']:
