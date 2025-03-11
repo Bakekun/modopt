@@ -142,7 +142,7 @@ class Optimizer(ABC):
         if not self.options['turn_off_outputs']:
             self.out_dir = f"{problem.problem_name}_outputs/{self.timestamp}"
             self.modopt_output_files  = [f"directory: {self.out_dir}", 'modopt_results.out']
-            os.makedirs(self.out_dir) # recursively create the directory
+            os.makedirs(self.out_dir, exist_ok=True) # recursively create the directory
         else:
             if self.options['recording']:
                 raise ValueError("Cannot record with 'turn_off_outputs=True'.")
@@ -374,7 +374,7 @@ class Optimizer(ABC):
                 self.print_results(all=True)
 
         if self.options['recording']:
-            group = self.record.create_group('results')
+            group = self.record.require_group('results')
             for key, value in self.results.items():
                 if self.solver_name.startswith('convex_qpsolvers') and key in ['problem', 'extras']:
                     continue
@@ -382,7 +382,11 @@ class Optimizer(ABC):
                     for k, v in value.items():
                         group[f"{key}-{k}"] = v
                 else:
-                    group[key] = value
+                    if key in group:
+                        del group[key]  # Remove existing key before overwriting
+
+                        group[key] = value
+
 
     def update_outputs(self, **kwargs):
         '''
@@ -446,7 +450,11 @@ class Optimizer(ABC):
         # 3. Write the outputs to the recording files
         if self.options['recording']:
             group_name = 'iteration_' + str(self.update_outputs_count)
+            if group_name in self.record:
+                del self.record[group_name]  # Delete the existing group before overwriting
+
             group = self.record.create_group(group_name)
+
             for var, value in out_dict.items():
                 group[var] = value
                 

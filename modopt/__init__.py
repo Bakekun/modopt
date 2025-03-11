@@ -27,6 +27,15 @@ from modopt.external_libraries.snopt import SNOPTc as SNOPT
 from modopt.external_libraries.ipopt import IPOPT
 from modopt.external_libraries.qpsolvers import ConvexQPSolvers
 from modopt.external_libraries.cvxopt import CVXOPT
+from modopt.external_libraries.cma import CMAES
+from modopt.external_libraries.deap import DEAPGeneric
+from modopt.external_libraries.deap import G3PCX
+from modopt.external_libraries.deap import CHC
+from modopt.external_libraries.deap import NSGAII
+from modopt.external_libraries.deap import NSGAIII
+from modopt.external_libraries.deap import MOEAD
+from modopt.external_libraries.deap import SPEA2
+from modopt.external_libraries.deap import PenaltyDEAPGeneric
 
 # import built-in optimizers
 # unconstrained
