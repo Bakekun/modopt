@@ -1,4 +1,5 @@
 import time
+import numpy as np
 from modopt import Optimizer
 from deap import base, creator, tools
 import random

@@ -36,6 +36,7 @@ from modopt.external_libraries.deap import NSGAIII
 from modopt.external_libraries.deap import MOEAD
 from modopt.external_libraries.deap import SPEA2
 from modopt.external_libraries.deap import PenaltyDEAPGeneric
+from modopt.external_libraries.deap import ALDEAPGeneric
 
 # import built-in optimizers
 # unconstrained
